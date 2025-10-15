@@ -1,3 +1,19 @@
 PyQt6>=6.5
 SQLAlchemy>=2.0
 cryptography>=41.0
+# Async database support
+asyncpg>=0.29.0
+# Protocol and serialization
+msgpack>=1.0.7
+pydantic>=2.5.0
+# Async HTTP client
+aiohttp>=3.9.0
+# FastAPI stack (for future server implementation)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-jose[cryptography]>=3.3.0
+python-multipart>=0.0.6
+# Redis for caching and sessions
+redis>=5.0.0
+# Alembic for database migrations
+alembic>=1.12.0
