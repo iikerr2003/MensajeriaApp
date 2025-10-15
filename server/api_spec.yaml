@@ -1,0 +1,866 @@
+openapi: 3.1.0
+info:
+  title: MensajeriaApp API
+  description: |
+    API REST y WebSocket para aplicación de mensajería segura con encriptación E2E.
+    
+    ## Características
+    - Autenticación JWT con refresh tokens
+    - Encriptación E2E (el servidor solo almacena mensajes encriptados)
+    - WebSockets para mensajería en tiempo real
+    - Rate limiting (100 req/min por usuario)
+    - Soporte multi-dispositivo
+    
+  version: 1.0.0
+  contact:
+    name: MensajeriaApp Team
+    email: support@mensajeriaapp.com
+
+servers:
+  - url: http://localhost:8000
+    description: Servidor de desarrollo local
+  - url: https://api.mensajeriaapp.com
+    description: Servidor de producción
+
+tags:
+  - name: auth
+    description: Operaciones de autenticación y registro
+  - name: chats
+    description: Gestión de chats
+  - name: messages
+    description: Envío y recepción de mensajes
+  - name: users
+    description: Gestión de perfiles de usuario
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtenido del endpoint /auth/login
+  
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - username
+        - email
+        - uuid
+        - is_active
+        - created_at
+      properties:
+        id:
+          type: integer
+          description: ID único del usuario
+          example: 1
+        uuid:
+          type: string
+          format: uuid
+          description: UUID único del usuario
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          description: Nombre de usuario único
+          example: "john_doe"
+        email:
+          type: string
+          format: email
+          description: Email único del usuario
+          example: "john@example.com"
+        phone_number:
+          type: string
+          nullable: true
+          description: Número de teléfono
+          example: "+1234567890"
+        profile_picture:
+          type: string
+          nullable: true
+          description: URL de la imagen de perfil
+          example: "https://cdn.example.com/profiles/user1.jpg"
+        is_active:
+          type: boolean
+          description: Estado de actividad del usuario
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Fecha de creación
+          example: "2024-01-15T10:30:00Z"
+        last_login:
+          type: string
+          format: date-time
+          nullable: true
+          description: Último inicio de sesión
+          example: "2024-01-20T15:45:00Z"
+    
+    Chat:
+      type: object
+      required:
+        - id
+        - chat_uuid
+        - user1_id
+        - user2_id
+        - encryption_type
+        - created_at
+      properties:
+        id:
+          type: integer
+          description: ID único del chat
+          example: 1
+        chat_uuid:
+          type: string
+          format: uuid
+          description: UUID único del chat
+          example: "750e8400-e29b-41d4-a716-446655440000"
+        user1_id:
+          type: integer
+          description: ID del primer usuario
+          example: 1
+        user2_id:
+          type: integer
+          description: ID del segundo usuario
+          example: 2
+        encryption_type:
+          type: string
+          enum: [AES-256-GCM, ChaCha20-Poly1305, RSA-OAEP]
+          description: Tipo de encriptación usado
+          example: "AES-256-GCM"
+        auto_delete_hours:
+          type: integer
+          nullable: true
+          description: Horas para auto-destrucción de mensajes
+          example: 24
+        my_message_color:
+          type: string
+          description: Color hex para mensajes propios
+          example: "#DCF8C6"
+        their_message_color:
+          type: string
+          description: Color hex para mensajes recibidos
+          example: "#FFFFFF"
+        is_hidden_user1:
+          type: boolean
+          description: Chat oculto para user1
+          example: false
+        is_hidden_user2:
+          type: boolean
+          description: Chat oculto para user2
+          example: false
+        created_at:
+          type: string
+          format: date-time
+          description: Fecha de creación del chat
+          example: "2024-01-15T10:30:00Z"
+        last_message_at:
+          type: string
+          format: date-time
+          description: Fecha del último mensaje
+          example: "2024-01-20T15:45:00Z"
+    
+    Message:
+      type: object
+      required:
+        - id
+        - chat_id
+        - sender_id
+        - encrypted_content
+        - timestamp
+      properties:
+        id:
+          type: integer
+          description: ID único del mensaje
+          example: 1
+        chat_id:
+          type: integer
+          description: ID del chat al que pertenece
+          example: 1
+        sender_id:
+          type: integer
+          description: ID del usuario remitente
+          example: 1
+        encrypted_content:
+          type: string
+          description: Contenido encriptado del mensaje (Base64)
+          example: "eyJlbmNyeXB0ZWQiOiAidGVzdCJ9"
+        nonce:
+          type: string
+          description: Nonce de encriptación (Base64)
+          example: "nonce12345"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp del mensaje
+          example: "2024-01-20T15:45:00Z"
+        is_read:
+          type: boolean
+          description: Estado de lectura del mensaje
+          example: false
+        delete_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp de auto-destrucción
+          example: "2024-01-21T15:45:00Z"
+    
+    AuthRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          description: Nombre de usuario
+          example: "john_doe"
+        password:
+          type: string
+          minLength: 6
+          description: Contraseña del usuario
+          example: "secure_password123"
+        device_id:
+          type: string
+          maxLength: 100
+          description: Identificador del dispositivo (opcional)
+          example: "device_uuid_123"
+    
+    AuthResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          description: Indica si la autenticación fue exitosa
+          example: true
+        access_token:
+          type: string
+          description: Token JWT de acceso (válido 1 hora)
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refresh_token:
+          type: string
+          description: Token JWT de refresh (válido 30 días)
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user_id:
+          type: integer
+          description: ID del usuario autenticado
+          example: 1
+        username:
+          type: string
+          description: Nombre del usuario autenticado
+          example: "john_doe"
+        expires_in:
+          type: integer
+          description: Segundos hasta expiración del access_token
+          example: 3600
+        error:
+          type: string
+          nullable: true
+          description: Mensaje de error si success=false
+          example: "Credenciales inválidas"
+    
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          description: Nombre de usuario deseado
+          example: "john_doe"
+        email:
+          type: string
+          format: email
+          description: Email del usuario
+          example: "john@example.com"
+        password:
+          type: string
+          minLength: 6
+          description: Contraseña del usuario
+          example: "secure_password123"
+        phone_number:
+          type: string
+          nullable: true
+          description: Número de teléfono (opcional)
+          example: "+1234567890"
+    
+    ErrorResponse:
+      type: object
+      required:
+        - error_code
+        - error_message
+      properties:
+        error_code:
+          type: string
+          description: Código de error
+          example: "AUTH_FAILED"
+        error_message:
+          type: string
+          description: Mensaje descriptivo del error
+          example: "Credenciales inválidas"
+        details:
+          type: object
+          nullable: true
+          description: Detalles adicionales del error
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp del error
+          example: "2024-01-20T15:45:00Z"
+    
+    ChatListResponse:
+      type: object
+      required:
+        - chats
+        - total
+      properties:
+        chats:
+          type: array
+          items:
+            $ref: '#/components/schemas/Chat'
+          description: Lista de chats
+        total:
+          type: integer
+          description: Total de chats disponibles
+          example: 15
+        page:
+          type: integer
+          description: Página actual
+          example: 1
+    
+    MessageListResponse:
+      type: object
+      required:
+        - messages
+        - total
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+          description: Lista de mensajes
+        total:
+          type: integer
+          description: Total de mensajes en el chat
+          example: 150
+        has_more:
+          type: boolean
+          description: Indica si hay más mensajes disponibles
+          example: true
+
+paths:
+  /health:
+    get:
+      summary: Health Check
+      description: Verifica el estado del servidor
+      tags:
+        - system
+      responses:
+        '200':
+          description: Servidor operativo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+  
+  /auth/login:
+    post:
+      summary: Iniciar sesión
+      description: Autentica un usuario y devuelve tokens JWT
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Demasiados intentos de login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  /auth/register:
+    post:
+      summary: Registrar nuevo usuario
+      description: Crea una nueva cuenta de usuario
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Usuario o email ya existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  /auth/refresh:
+    post:
+      summary: Refrescar access token
+      description: Obtiene un nuevo access token usando el refresh token
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+                  description: Refresh token válido
+      responses:
+        '200':
+          description: Token refrescado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  expires_in:
+                    type: integer
+        '401':
+          description: Refresh token inválido o expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  
+  /chats:
+    get:
+      summary: Listar chats del usuario
+      description: Obtiene todos los chats del usuario autenticado
+      tags:
+        - chats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Número de página (paginación)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Cantidad de chats por página
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: include_hidden
+          in: query
+          description: Incluir chats ocultos
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Lista de chats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatListResponse'
+        '401':
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    post:
+      summary: Crear nuevo chat
+      description: Crea un chat entre dos usuarios
+      tags:
+        - chats
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: integer
+                  description: ID del usuario con quien chatear
+                encryption_type:
+                  type: string
+                  enum: [AES-256-GCM, ChaCha20-Poly1305, RSA-OAEP]
+                  default: "AES-256-GCM"
+                auto_delete_hours:
+                  type: integer
+                  nullable: true
+                  description: Horas para auto-destrucción
+      responses:
+        '201':
+          description: Chat creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chat'
+        '400':
+          description: Datos inválidos
+        '401':
+          description: No autenticado
+        '409':
+          description: Chat ya existe
+  
+  /chats/{chat_id}:
+    get:
+      summary: Obtener detalles de un chat
+      description: Obtiene información detallada de un chat específico
+      tags:
+        - chats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chat_id
+          in: path
+          required: true
+          description: ID del chat
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detalles del chat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chat'
+        '401':
+          description: No autenticado
+        '403':
+          description: No autorizado para acceder a este chat
+        '404':
+          description: Chat no encontrado
+  
+  /chats/{chat_id}/messages:
+    get:
+      summary: Obtener mensajes de un chat
+      description: Obtiene mensajes de un chat con paginación
+      tags:
+        - messages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chat_id
+          in: path
+          required: true
+          description: ID del chat
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          description: Cantidad de mensajes a recuperar
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          description: Offset para paginación
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: before
+          in: query
+          description: ID del mensaje (para paginación cursor-based)
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Lista de mensajes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageListResponse'
+        '401':
+          description: No autenticado
+        '403':
+          description: No autorizado
+        '404':
+          description: Chat no encontrado
+    
+    post:
+      summary: Enviar mensaje a un chat
+      description: Envía un mensaje encriptado a un chat
+      tags:
+        - messages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chat_id
+          in: path
+          required: true
+          description: ID del chat
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+                - nonce
+              properties:
+                content:
+                  type: string
+                  description: Contenido encriptado (Base64)
+                nonce:
+                  type: string
+                  description: Nonce de encriptación (Base64)
+      responses:
+        '201':
+          description: Mensaje enviado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: Datos inválidos
+        '401':
+          description: No autenticado
+        '403':
+          description: No autorizado
+        '429':
+          description: Rate limit excedido
+  
+  /chats/{chat_id}/config:
+    patch:
+      summary: Actualizar configuración del chat
+      description: Actualiza configuración como colores o auto-destrucción
+      tags:
+        - chats
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chat_id
+          in: path
+          required: true
+          description: ID del chat
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                my_message_color:
+                  type: string
+                  description: Color hex para mis mensajes
+                their_message_color:
+                  type: string
+                  description: Color hex para mensajes recibidos
+                auto_delete_hours:
+                  type: integer
+                  nullable: true
+                  description: Horas para auto-destrucción
+                encryption_type:
+                  type: string
+                  enum: [AES-256-GCM, ChaCha20-Poly1305, RSA-OAEP]
+      responses:
+        '200':
+          description: Configuración actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chat'
+        '400':
+          description: Datos inválidos
+        '401':
+          description: No autenticado
+        '403':
+          description: No autorizado
+        '404':
+          description: Chat no encontrado
+  
+  /users/me:
+    get:
+      summary: Obtener perfil del usuario actual
+      description: Devuelve información del usuario autenticado
+      tags:
+        - users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil del usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: No autenticado
+  
+  /users/search:
+    get:
+      summary: Buscar usuarios
+      description: Busca usuarios por username o email
+      tags:
+        - users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Término de búsqueda
+          schema:
+            type: string
+            minLength: 3
+        - name: limit
+          in: query
+          description: Cantidad de resultados
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Lista de usuarios encontrados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  total:
+                    type: integer
+        '401':
+          description: No autenticado
+
+  # WebSocket endpoint (documentado pero no es REST)
+  /ws/chat/{chat_id}:
+    get:
+      summary: WebSocket para mensajería en tiempo real
+      description: |
+        Establece una conexión WebSocket para recibir mensajes en tiempo real.
+        
+        **Eventos enviados por el servidor:**
+        - `message`: Nuevo mensaje recibido
+        - `typing`: Usuario está escribiendo
+        - `read`: Mensaje marcado como leído
+        - `user_online`: Usuario se conectó
+        - `user_offline`: Usuario se desconectó
+        
+        **Eventos enviados por el cliente:**
+        - `message`: Enviar mensaje
+        - `typing`: Notificar que está escribiendo
+        - `read`: Marcar mensaje como leído
+        
+        **Autenticación:**
+        Enviar token JWT en query parameter: `?token=<jwt_token>`
+        
+        **Formato de mensajes:**
+        ```json
+        {
+          "type": "message",
+          "chat_id": 1,
+          "content": "base64_encrypted_content",
+          "nonce": "base64_nonce",
+          "timestamp": 1234567890.123
+        }
+        ```
+      tags:
+        - messages
+      parameters:
+        - name: chat_id
+          in: path
+          required: true
+          description: ID del chat
+          schema:
+            type: integer
+        - name: token
+          in: query
+          required: true
+          description: JWT token para autenticación
+          schema:
+            type: string
+      responses:
+        '101':
+          description: WebSocket connection established
+        '401':
+          description: Token inválido o no proporcionado
+        '403':
+          description: No autorizado para acceder a este chat
+
+x-rate-limiting:
+  description: |
+    Rate limiting aplicado a todos los endpoints:
+    - 100 requests por minuto por usuario autenticado
+    - 20 requests por minuto para endpoints de autenticación por IP
+    
+    Headers de respuesta:
+    - X-RateLimit-Limit: Límite de requests
+    - X-RateLimit-Remaining: Requests restantes
+    - X-RateLimit-Reset: Timestamp de reset del límite
