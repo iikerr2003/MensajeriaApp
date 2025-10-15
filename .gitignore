@@ -40,6 +40,7 @@ env/
 
 # Logs
 *.log
+logs/
 
 # OS
 .DS_Store
@@ -47,3 +48,11 @@ Thumbs.db
 
 # Alembic
 alembic/versions/*.pyc
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Docker
+docker-compose.override.yml
